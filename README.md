@@ -58,7 +58,8 @@ installs: unzip and run.
   -clicking first will just say the app is damaged or from an unidentified
   developer. Alternatively run `xattr -cr /path/to/rplMaker.app` once.
 
-Each zip also contains `rplmaker`, the command-line converter.
+Each zip also contains the command-line converter alongside the app:
+`rplmaker-cli.exe` on Windows, `rplmaker` on macOS.
 
 ## Building
 

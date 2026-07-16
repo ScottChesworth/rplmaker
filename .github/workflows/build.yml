@@ -50,13 +50,30 @@ jobs:
           cargo build --release -p rplmaker-gui
           cargo build --release -p rplmaker-cli
 
+      # The CLI is staged as rplmaker-cli.exe, not rplmaker.exe: Windows
+      # filenames are case-insensitive, so rplmaker.exe would be the same file
+      # as the GUI's rplMaker.exe and would silently overwrite it.
       - name: Stage portable folder
         shell: bash
         run: |
           mkdir -p dist/rplMaker
           cp target/release/rplmaker-gui.exe dist/rplMaker/rplMaker.exe
-          cp target/release/rplmaker.exe dist/rplMaker/rplmaker.exe
+          cp target/release/rplmaker.exe dist/rplMaker/rplmaker-cli.exe
           cp README.md GUIDE.md LICENSE dist/rplMaker/
+
+      # The GUI links a webview and is several MB; the CLI is under 1 MB. A
+      # tiny "GUI" means the wrong binary got staged, which is easy to miss by
+      # eye but ships a console tool to people expecting an app.
+      - name: Verify the staged GUI really is the GUI
+        shell: bash
+        run: |
+          size=$(stat -c%s dist/rplMaker/rplMaker.exe)
+          echo "rplMaker.exe is $size bytes"
+          if [ "$size" -lt 2000000 ]; then
+            echo "::error::rplMaker.exe is only $size bytes - the GUI was not staged correctly"
+            exit 1
+          fi
+          test -f dist/rplMaker/rplmaker-cli.exe
 
       - name: Zip
         shell: bash
@@ -100,19 +117,31 @@ jobs:
 
       - name: Stage portable folder
         run: |
-          mkdir -p dist
+          mkdir -p dist/rplMaker
           APP=$(find target -type d -name "rplMaker.app" | head -1)
-          if [ -z "$APP" ]; then echo "no .app bundle was produced"; exit 1; fi
-          cp -R "$APP" dist/
-          lipo -create -output dist/rplmaker \
+          if [ -z "$APP" ]; then echo "::error::no .app bundle was produced"; exit 1; fi
+          cp -R "$APP" dist/rplMaker/
+          lipo -create -output dist/rplMaker/rplmaker \
             target/aarch64-apple-darwin/release/rplmaker \
             target/x86_64-apple-darwin/release/rplmaker
-          cp README.md GUIDE.md LICENSE dist/
+          cp README.md GUIDE.md LICENSE dist/rplMaker/
+
+      - name: Verify the bundled app really is the GUI
+        run: |
+          bin="dist/rplMaker/rplMaker.app/Contents/MacOS/rplmaker-gui"
+          size=$(stat -f%z "$bin")
+          echo "bundled GUI is $size bytes"
+          if [ "$size" -lt 2000000 ]; then
+            echo "::error::bundled GUI is only $size bytes - wrong binary staged"
+            exit 1
+          fi
+          lipo -archs "$bin"
 
       # ditto preserves the bundle's symlinks and metadata; a plain zip can
-      # corrupt a .app.
+      # corrupt a .app. --keepParent makes the zip unpack to an rplMaker
+      # folder rather than scattering files into the download directory.
       - name: Zip
-        run: ditto -c -k --sequesterRsrc --keepParent dist rplMaker-macos-universal-portable.zip
+        run: ditto -c -k --sequesterRsrc --keepParent dist/rplMaker rplMaker-macos-universal-portable.zip
 
       - uses: actions/upload-artifact@v4
         with:
