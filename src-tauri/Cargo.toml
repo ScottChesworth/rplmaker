@@ -1,0 +1,15 @@
+[package]
+name = "rplmaker-gui"
+description = "Accessible GUI for converting plugin preset files to REAPER RPL preset libraries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+rplmaker-core = { path = "../crates/rplmaker-core" }

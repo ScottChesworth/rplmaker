@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rplMaker</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, sans-serif;
+    margin: 1.25rem;
+    max-width: 46rem;
+    line-height: 1.4;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.05rem; }
+  fieldset { margin: 0 0 1rem; padding: .75rem 1rem; border-radius: .4rem; }
+  legend { font-weight: 600; padding: 0 .3rem; }
+  label { display: block; margin-bottom: .25rem; font-weight: 600; }
+  #folderMode label, label.plain { font-weight: normal; margin: .4rem 0; }
+  #presetList { width: 100%; margin-bottom: .5rem; font: inherit; }
+  #keyboardHelp { margin-top: .75rem; }
+  #keyboardHelp summary { cursor: pointer; font-weight: 600; }
+  #folderMode { margin-top: .75rem; }
+  input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: .45rem;
+    margin-bottom: .5rem;
+    font: inherit;
+  }
+  button { font: inherit; padding: .45rem .9rem; margin: 0 .5rem .25rem 0; }
+  #convert { font-weight: 600; padding: .55rem 1.4rem; }
+  .hint { font-size: .9rem; margin: .4rem 0 0; }
+  #results { border: 1px solid currentColor; border-radius: .4rem; padding: .25rem 1rem .75rem; margin-top: 1.25rem; }
+  ul { margin: .3rem 0; padding-left: 1.4rem; }
+</style>
+</head>
+<body>
+<h1 id="appTitle" tabindex="-1">rplMaker</h1>
+<p>Convert plugin preset files into a REAPER preset library (RPL) that loads through REAPER's accessible preset combobox.</p>
+
+<fieldset>
+  <legend>Step 1: Template</legend>
+  <label for="templatePath">Template RPL file</label>
+  <input type="text" id="templatePath" readonly aria-describedby="templateHint">
+  <button type="button" id="pickTemplate">Browse for template RPL…</button>
+  <p class="hint" id="templateHint">In REAPER, save any one preset for the plugin from its FX preset combobox, then choose "Export preset library" from the preset menu. That exported RPL is the template: it teaches rplMaker the plugin-specific data it can't learn from the preset files alone.</p>
+  <p id="libraryName" role="status" aria-live="polite"></p>
+</fieldset>
+
+<fieldset>
+  <legend>Step 2: Presets to convert</legend>
+  <button type="button" id="addFiles">Add preset files…</button>
+  <button type="button" id="addFolder">Add a folder…</button>
+  <button type="button" id="scanPlugin">Scan a plug-in for embedded presets…</button>
+  <button type="button" id="clearInputs">Clear list</button>
+  <p class="hint">Scanning digs factory presets out of the plug-in file itself, for plug-ins that ship no preset files. It needs the template from step 1 first, and found presets get numbered names since real names are not stored in a readable form.</p>
+  <h2 id="inputsHeading">Chosen files and folders: none yet</h2>
+  <ul id="inputList" aria-labelledby="inputsHeading"></ul>
+  <p id="folderNotice" role="status" aria-live="polite"></p>
+  <fieldset id="folderMode" hidden>
+    <legend>Subfolders found. How should the preset list read?</legend>
+    <label>
+      <input type="radio" name="folderMode" value="flat" checked>
+      One straight list: every preset keeps its saved name
+    </label>
+    <label>
+      <input type="radio" name="folderMode" value="deepest">
+      Announce folders by name: the first preset from each subfolder gets that folder's name in front, like "Ambient folder: Dark Cave", so you hear where each folder starts while arrowing through the list
+    </label>
+    <label>
+      <input type="radio" name="folderMode" value="full">
+      Announce folders by full path: same idea, but the marker spells out nested folders, like "Artists, Adam Christianson folder: Dreamolo"
+    </label>
+  </fieldset>
+</fieldset>
+
+<fieldset>
+  <legend>Step 3: Output</legend>
+  <label class="plain">
+    <input type="checkbox" id="sameFolder">
+    Save in the same folder as the template
+  </label>
+  <div id="nameRow" hidden>
+    <label for="outputName">File name</label>
+    <input type="text" id="outputName" value="Converted presets.RPL">
+    <p class="hint" id="outputNameHint" role="status" aria-live="polite"></p>
+  </div>
+  <label for="outputPath">Output RPL file</label>
+  <input type="text" id="outputPath" readonly>
+  <button type="button" id="pickOutput">Choose where to save…</button>
+</fieldset>
+
+<button type="button" id="convert">Convert</button>
+
+<div id="results" hidden>
+  <h2 id="resultsHeading" tabindex="-1">Results</h2>
+  <div id="status" role="status" aria-live="polite"></div>
+  <ul id="detailList"></ul>
+  <button type="button" id="editResult" hidden>Open this library in the editor</button>
+</div>
+
+<h2>Edit a preset library</h2>
+<p>Open a finished RPL to rename, reorder, remove, or duplicate its presets, then save the changes back to the same file.</p>
+<fieldset>
+  <legend>Library</legend>
+  <label for="editPath">RPL file being edited</label>
+  <input type="text" id="editPath" readonly>
+  <button type="button" id="openLibrary">Open RPL to edit…</button>
+  <p id="editStatus" role="status" aria-live="polite"></p>
+</fieldset>
+<div id="editor" hidden>
+  <fieldset>
+    <legend>Presets</legend>
+    <label for="presetList">Presets, in library order. Press F1 for keyboard help.</label>
+    <select id="presetList" multiple size="14"></select>
+    <p id="selectionCount" class="hint" role="status" aria-live="polite"></p>
+    <div>
+      <button type="button" id="moveTop">Move to top</button>
+      <button type="button" id="moveUp">Move up</button>
+      <button type="button" id="moveDown">Move down</button>
+      <button type="button" id="moveBottom">Move to bottom</button>
+    </div>
+    <div>
+      <button type="button" id="duplicateSelected">Duplicate selected</button>
+      <button type="button" id="removeSelected">Remove selected</button>
+    </div>
+    <label for="findInput">Find preset by name</label>
+    <input type="text" id="findInput">
+    <button type="button" id="findNext">Find next</button>
+    <button type="button" id="findPrevious">Find previous</button>
+    <label for="renameInput">New name for the selected preset</label>
+    <input type="text" id="renameInput">
+    <button type="button" id="renameButton">Rename selected</button>
+    <details id="keyboardHelp">
+      <summary id="helpSummary">Keyboard help</summary>
+      <ul>
+        <li>Shift or Control with arrows: select more than one preset</li>
+        <li>Control+Up or Control+Down: move the selected presets</li>
+        <li>Control+Home or Control+End: move the selection to the top or bottom</li>
+        <li>Control+X then Control+V: cut the selected presets, then drop them below the focused preset</li>
+        <li>Alt+Up or Alt+Down: seek to the start of the previous or next folder</li>
+        <li>Shift+F: select the whole folder around the current preset</li>
+        <li>Control+F: find a preset by name; Enter searches, Shift+Enter searches backwards</li>
+        <li>F3 or Shift+F3: repeat the search forwards or backwards</li>
+        <li>F2: rename the selected preset; Enter applies, Escape cancels</li>
+        <li>Delete: remove the selected presets</li>
+        <li>Control+S: save changes</li>
+        <li>F1: open this help; Escape closes it and returns to the list</li>
+      </ul>
+    </details>
+  </fieldset>
+  <button type="button" id="saveLibrary">Save changes</button>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

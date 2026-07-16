@@ -1,0 +1,126 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Tag builds attach the portable zips to a GitHub Release.
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The integration tests are driven by the Examples/ vendor preset files,
+      # which are other people's factory presets and are not committed (see
+      # .gitignore). Without them those tests skip themselves, so this job
+      # proves the workspace compiles and clippy is clean, but it does NOT
+      # exercise the converter. Run `cargo test` locally, where Examples/
+      # exists, before trusting a change.
+      - name: Test (fixture-backed tests skip without Examples/)
+        run: cargo test --workspace --exclude rplmaker-gui
+      - name: Clippy
+        run: cargo clippy --workspace --exclude rplmaker-gui
+
+  windows:
+    name: Windows portable
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # The Tauri frontend is embedded into the exe at build time, so the GUI
+      # is a single self-contained file: no installer, nothing to unpack.
+      - name: Build GUI and CLI
+        run: |
+          cargo build --release -p rplmaker-gui
+          cargo build --release -p rplmaker-cli
+
+      - name: Stage portable folder
+        shell: bash
+        run: |
+          mkdir -p dist/rplMaker
+          cp target/release/rplmaker-gui.exe dist/rplMaker/rplMaker.exe
+          cp target/release/rplmaker.exe dist/rplMaker/rplmaker.exe
+          cp README.md GUIDE.md LICENSE dist/rplMaker/
+
+      - name: Zip
+        shell: bash
+        run: cd dist && 7z a -tzip ../rplMaker-windows-x64-portable.zip rplMaker
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rplMaker-windows-x64-portable
+          path: rplMaker-windows-x64-portable.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rplMaker-windows-x64-portable.zip
+
+  macos:
+    name: macOS portable
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      # A macOS GUI needs a real .app bundle; universal so it runs on both
+      # Apple Silicon and Intel. --bundles app skips the dmg installer.
+      - name: Build universal .app
+        working-directory: src-tauri
+        run: cargo tauri build --bundles app --target universal-apple-darwin
+
+      - name: Build CLI (universal)
+        run: |
+          cargo build --release -p rplmaker-cli --target aarch64-apple-darwin
+          cargo build --release -p rplmaker-cli --target x86_64-apple-darwin
+
+      - name: Stage portable folder
+        run: |
+          mkdir -p dist
+          APP=$(find target -type d -name "rplMaker.app" | head -1)
+          if [ -z "$APP" ]; then echo "no .app bundle was produced"; exit 1; fi
+          cp -R "$APP" dist/
+          lipo -create -output dist/rplmaker \
+            target/aarch64-apple-darwin/release/rplmaker \
+            target/x86_64-apple-darwin/release/rplmaker
+          cp README.md GUIDE.md LICENSE dist/
+
+      # ditto preserves the bundle's symlinks and metadata; a plain zip can
+      # corrupt a .app.
+      - name: Zip
+        run: ditto -c -k --sequesterRsrc --keepParent dist rplMaker-macos-universal-portable.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rplMaker-macos-universal-portable
+          path: rplMaker-macos-universal-portable.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rplMaker-macos-universal-portable.zip

@@ -1,0 +1,9 @@
+[package]
+name = "rplmaker-core"
+description = "Convert plugin preset files into REAPER RPL preset libraries"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64 = "0.22"
