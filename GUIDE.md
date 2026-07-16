@@ -147,7 +147,8 @@ either method — the scan will tell you so rather than guess.
 rplMaker works with plug-ins built on the JUCE framework, which is most of
 them. It reads both of JUCE's ways of storing state (XML and binary), and
 copes with the extra wrapping some plug-ins add. Confirmed working so far:
-Neural DSP's Archetype line (John Mayer X, Gojira) and Mercuriall Ampbox.
+Neural DSP's Archetype line (John Mayer X, Gojira), Mercuriall Ampbox, and
+Universal Audio's UADx range.
 
 Universal Audio's UADx plug-ins work too. Their factory presets ship as JSON
 files inside the plug-in itself; point step 2 at the plug-in's presets
