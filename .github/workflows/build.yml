@@ -84,12 +84,6 @@ jobs:
           name: rplMaker-windows-x64-portable
           path: rplMaker-windows-x64-portable.zip
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: rplMaker-windows-x64-portable.zip
-
   macos:
     name: macOS portable
     needs: test
@@ -148,8 +142,21 @@ jobs:
           name: rplMaker-macos-universal-portable
           path: rplMaker-macos-universal-portable.zip
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+  # One job publishes, after both builds are in. Attaching from each platform
+  # job instead would have them race to create the same release.
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Attach portable builds to the release
         uses: softprops/action-gh-release@v2
         with:
-          files: rplMaker-macos-universal-portable.zip
+          files: artifacts/**/*.zip
+          # Tags carrying a suffix (v0.1.0-beta1) are pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
